@@ -509,7 +509,7 @@ const drawColumnFrame = (
     }
   } else if (resolvedActive) {
     drawImageOnCol(resolvedActive, 1.0, activeBlock ? activeBlock.startTime : 0, activeBlock ? activeBlock.endTime : 5, false);
-  } else if (resolvedPrev) {
+  } else if (resolvedPrev && !activeBlock) {
     drawImageOnCol(resolvedPrev, 1.0, prevBlock ? prevBlock.startTime : 0, prevBlock ? prevBlock.endTime : 5, true);
   } else {
     // Solid background if no assets at all
@@ -7638,11 +7638,6 @@ export function drawVideoFrame(
         }
       }
 
-      let numCols = Math.max(activeImageIds.length, prevImageIds.length);
-      if (numCols < 1) {
-        numCols = 2;
-      }
-
       let transitionProgress = 1;
       let isTransitioning = false;
       const hasActiveImage = activeImageIds.some(id => imageCache.has(id));
@@ -7654,6 +7649,13 @@ export function drawVideoFrame(
           transitionProgress = timeSinceStart / config.transitionDuration;
           isTransitioning = true;
         }
+      }
+
+      let numCols = isTransitioning 
+        ? Math.max(activeImageIds.length, prevImageIds.length)
+        : (activeBlock ? activeImageIds.length : prevImageIds.length);
+      if (numCols < 1) {
+        numCols = 2;
       }
 
       for (let colIndex = 0; colIndex < numCols; colIndex++) {
@@ -8107,12 +8109,6 @@ export function drawVideoFrame(
     }
   }
 
-  // The number of split-screen columns depends on how many images have been mapped
-  let numCols = Math.max(activeImageIds.length, prevImageIds.length);
-  if (numCols < 1) {
-    numCols = 2; // fallback
-  }
-
   // Determine if we are inside a transition window
   let transitionProgress = 1;
   let isTransitioning = false;
@@ -8126,6 +8122,14 @@ export function drawVideoFrame(
       transitionProgress = timeSinceStart / config.transitionDuration;
       isTransitioning = true;
     }
+  }
+
+  // The number of split-screen columns depends on how many images have been mapped
+  let numCols = isTransitioning 
+    ? Math.max(activeImageIds.length, prevImageIds.length)
+    : (activeBlock ? activeImageIds.length : prevImageIds.length);
+  if (numCols < 1) {
+    numCols = 2; // fallback
   }
   
   // Draw each column split cell

@@ -877,6 +877,13 @@ export default function App() {
       });
 
       let matchedKeywords = Object.keys(keywordToImages);
+      matchedKeywords.sort((a, b) => {
+        const idxA = block.text.toLowerCase().indexOf(a.toLowerCase());
+        const idxB = block.text.toLowerCase().indexOf(b.toLowerCase());
+        const valA = idxA === -1 ? 999999 : idxA;
+        const valB = idxB === -1 ? 999999 : idxB;
+        return valA - valB;
+      });
 
       // If it is the first block (index 0) and has no matching keywords, default to the most frequent keyword in srt
       if (i === 0 && matchedKeywords.length === 0 && sortedKws.length > 0) {
