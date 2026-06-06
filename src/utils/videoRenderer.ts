@@ -149,7 +149,8 @@ const drawColumnFrame = (
   time: number,
   images: CharacterImage[],
   imageCache: Map<string, HTMLImageElement>,
-  shouldFlip: boolean
+  shouldFlip: boolean,
+  customAlpha?: number
 ) => {
   const colWidth = width / totalCols;
   const startX = colIndex * colWidth;
@@ -170,7 +171,7 @@ const drawColumnFrame = (
     activeTransType?: string
   ) => {
     ctx.save();
-    ctx.globalAlpha = alpha;
+    ctx.globalAlpha = alpha * (customAlpha !== undefined ? customAlpha : 1.0);
 
     // Apply Transition Clipping Masks (at parent coordinates before translations)
     const currentTransType = activeTransType || config.transitionType;
@@ -7657,58 +7658,236 @@ export function drawVideoFrame(
         }
       }
 
-      let numCols = isTransitioning 
-        ? Math.max(activeImageIds.length, prevImageIds.length)
-        : (activeBlock ? activeImageIds.length : prevImageIds.length);
-      if (numCols < 1) {
-        numCols = 2;
-      }
+      if (isTransitioning && activeImageIds.length !== prevImageIds.length) {
+        const firstActiveImg = activeImageIds[0] ? imageCache.get(activeImageIds[0]) : null;
+        const firstPrevImg = prevImageIds[0] ? imageCache.get(prevImageIds[0]) : null;
+        const chosenType = (config.transitionType === 'random_all' && firstActiveImg && firstPrevImg)
+          ? getDeterministicTransitionType(firstPrevImg.src, firstActiveImg.src)
+          : config.transitionType;
 
-      for (let colIndex = 0; colIndex < numCols; colIndex++) {
-        const activeImgId = activeImageIds[colIndex];
-        const prevImgId = prevImageIds[colIndex];
-        const activeImgEl = activeImgId ? imageCache.get(activeImgId) : null;
-        const prevImgEl = prevImgId ? imageCache.get(prevImgId) : null;
-
-        let shouldFlip = false;
-        if (numCols === 2) {
-          if (colIndex === 1) shouldFlip = true;
-        } else if (numCols === 3) {
-          if (colIndex === 2) {
-            shouldFlip = true;
-          } else if (colIndex === 1) {
-            const blockId = activeBlock ? activeBlock.id : 0;
-            shouldFlip = (blockId % 2 === 0);
-          }
-        } else if (numCols === 4) {
-          if (colIndex === 2 || colIndex === 3) {
-            shouldFlip = true;
-          }
-        } else if (numCols > 4) {
-          const half = Math.floor(numCols / 2);
-          if (colIndex >= numCols - half) {
-            shouldFlip = true;
-          }
+        // --- Draw Layout 1 (Prev Block Columns) ---
+        ctx.save();
+        let alphaPrev = 1.0;
+        if (chosenType === 'slide' || chosenType === 'slide_left' || chosenType === 'slide_right' || chosenType === 'slide_up' || chosenType === 'slide_down' || chosenType === 'curtain_open') {
+          alphaPrev = 1.0;
+        } else {
+          alphaPrev = 1.0 - transitionProgress;
         }
 
-        drawColumnFrame(
-          ctx,
-          colIndex,
-          numCols,
-          width,
-          height,
-          activeImgEl || null,
-          prevImgEl || null,
-          activeBlock,
-          prevBlock,
-          isTransitioning,
-          transitionProgress,
-          config,
-          adjustedTime,
-          images,
-          imageCache,
-          shouldFlip
-        );
+        if (chosenType === 'slide' || chosenType === 'slide_left') {
+          ctx.translate(-(transitionProgress * width), 0);
+        } else if (chosenType === 'slide_right') {
+          ctx.translate(transitionProgress * width, 0);
+        } else if (chosenType === 'slide_up') {
+          ctx.translate(0, -(transitionProgress * height));
+        } else if (chosenType === 'slide_down') {
+          ctx.translate(0, transitionProgress * height);
+        } else if (chosenType === 'curtain_open') {
+          const half = width / 2;
+          ctx.beginPath();
+          ctx.rect(0, 0, half * (1 - transitionProgress), height);
+          ctx.rect(half + half * transitionProgress, 0, half * (1 - transitionProgress), height);
+          ctx.clip();
+        }
+
+        const prevCount = prevImageIds.length;
+        for (let colIndex = 0; colIndex < prevCount; colIndex++) {
+          const prevImgId = prevImageIds[colIndex];
+          const prevImgEl = prevImgId ? imageCache.get(prevImgId) : null;
+
+          let shouldFlip = false;
+          if (prevCount === 2) {
+            if (colIndex === 1) shouldFlip = true;
+          } else if (prevCount === 3) {
+            if (colIndex === 2) {
+              shouldFlip = true;
+            } else if (colIndex === 1) {
+              const blockId = prevBlock ? prevBlock.id : 0;
+              shouldFlip = (blockId % 2 === 0);
+            }
+          } else if (prevCount === 4) {
+            if (colIndex === 2 || colIndex === 3) {
+              shouldFlip = true;
+            }
+          } else if (prevCount > 4) {
+            const half = Math.floor(prevCount / 2);
+            if (colIndex >= prevCount - half) {
+              shouldFlip = true;
+            }
+          }
+
+          drawColumnFrame(
+            ctx,
+            colIndex,
+            prevCount,
+            width,
+            height,
+            null,
+            prevImgEl || null,
+            null,
+            prevBlock,
+            false,
+            1.0,
+            config,
+            adjustedTime,
+            images,
+            imageCache,
+            shouldFlip,
+            alphaPrev
+          );
+        }
+        ctx.restore();
+
+        // --- Draw Layout 2 (Active Block Columns) ---
+        ctx.save();
+        let alphaActive = 1.0;
+        if (chosenType === 'slide' || chosenType === 'slide_left' || chosenType === 'slide_right' || chosenType === 'slide_up' || chosenType === 'slide_down' || chosenType === 'curtain_open') {
+          alphaActive = 1.0;
+        } else {
+          alphaActive = transitionProgress;
+        }
+
+        if (chosenType === 'slide' || chosenType === 'slide_left') {
+          ctx.translate((1 - transitionProgress) * width, 0);
+        } else if (chosenType === 'slide_right') {
+          ctx.translate(-(1 - transitionProgress) * width, 0);
+        } else if (chosenType === 'slide_up') {
+          ctx.translate(0, (1 - transitionProgress) * height);
+        } else if (chosenType === 'slide_down') {
+          ctx.translate(0, -(1 - transitionProgress) * height);
+        } else if (chosenType === 'wipe_left') {
+          ctx.beginPath();
+          ctx.rect(width * (1 - transitionProgress), 0, width * transitionProgress, height);
+          ctx.clip();
+        } else if (chosenType === 'wipe_right') {
+          ctx.beginPath();
+          ctx.rect(0, 0, width * transitionProgress, height);
+          ctx.clip();
+        } else if (chosenType === 'wipe_up') {
+          ctx.beginPath();
+          ctx.rect(0, height * (1 - transitionProgress), width, height * transitionProgress);
+          ctx.clip();
+        } else if (chosenType === 'wipe_down') {
+          ctx.beginPath();
+          ctx.rect(0, 0, width, height * transitionProgress);
+          ctx.clip();
+        } else if (chosenType === 'curtain_close') {
+          ctx.beginPath();
+          const half = width / 2;
+          ctx.rect(0, 0, half * transitionProgress, height);
+          ctx.rect(width - half * transitionProgress, 0, half * transitionProgress, height);
+          ctx.clip();
+        } else if (chosenType === 'grid_dissolve') {
+          ctx.beginPath();
+          const numStrips = 12;
+          const stripWidth = width / numStrips;
+          for (let s = 0; s < numStrips; s++) {
+            ctx.rect(s * stripWidth, 0, stripWidth * transitionProgress, height);
+          }
+          ctx.clip();
+        }
+
+        const activeCount = activeImageIds.length;
+        for (let colIndex = 0; colIndex < activeCount; colIndex++) {
+          const activeImgId = activeImageIds[colIndex];
+          const activeImgEl = activeImgId ? imageCache.get(activeImgId) : null;
+
+          let shouldFlip = false;
+          if (activeCount === 2) {
+            if (colIndex === 1) shouldFlip = true;
+          } else if (activeCount === 3) {
+            if (colIndex === 2) {
+              shouldFlip = true;
+            } else if (colIndex === 1) {
+              const blockId = activeBlock ? activeBlock.id : 0;
+              shouldFlip = (blockId % 2 === 0);
+            }
+          } else if (activeCount === 4) {
+            if (colIndex === 2 || colIndex === 3) {
+              shouldFlip = true;
+            }
+          } else if (activeCount > 4) {
+            const half = Math.floor(activeCount / 2);
+            if (colIndex >= activeCount - half) {
+              shouldFlip = true;
+            }
+          }
+
+          drawColumnFrame(
+            ctx,
+            colIndex,
+            activeCount,
+            width,
+            height,
+            activeImgEl || null,
+            null,
+            activeBlock,
+            null,
+            false,
+            1.0,
+            config,
+            adjustedTime,
+            images,
+            imageCache,
+            shouldFlip,
+            alphaActive
+          );
+        }
+        ctx.restore();
+      } else {
+        let numCols = isTransitioning 
+          ? Math.max(activeImageIds.length, prevImageIds.length)
+          : (activeBlock ? activeImageIds.length : prevImageIds.length);
+        if (numCols < 1) {
+          numCols = 2;
+        }
+
+        for (let colIndex = 0; colIndex < numCols; colIndex++) {
+          const activeImgId = activeImageIds[colIndex];
+          const prevImgId = prevImageIds[colIndex];
+          const activeImgEl = activeImgId ? imageCache.get(activeImgId) : null;
+          const prevImgEl = prevImgId ? imageCache.get(prevImgId) : null;
+
+          let shouldFlip = false;
+          if (numCols === 2) {
+            if (colIndex === 1) shouldFlip = true;
+          } else if (numCols === 3) {
+            if (colIndex === 2) {
+              shouldFlip = true;
+            } else if (colIndex === 1) {
+              const blockId = activeBlock ? activeBlock.id : 0;
+              shouldFlip = (blockId % 2 === 0);
+            }
+          } else if (numCols === 4) {
+            if (colIndex === 2 || colIndex === 3) {
+              shouldFlip = true;
+            }
+          } else if (numCols > 4) {
+            const half = Math.floor(numCols / 2);
+            if (colIndex >= numCols - half) {
+              shouldFlip = true;
+            }
+          }
+
+          drawColumnFrame(
+            ctx,
+            colIndex,
+            numCols,
+            width,
+            height,
+            activeImgEl || null,
+            prevImgEl || null,
+            activeBlock,
+            prevBlock,
+            isTransitioning,
+            transitionProgress,
+            config,
+            adjustedTime,
+            images,
+            imageCache,
+            shouldFlip
+          );
+        }
       }
 
       // Render background particles
@@ -8131,65 +8310,243 @@ export function drawVideoFrame(
   }
 
   // The number of split-screen columns depends on how many images have been mapped
-  let numCols = isTransitioning 
-    ? Math.max(activeImageIds.length, prevImageIds.length)
-    : (activeBlock ? activeImageIds.length : prevImageIds.length);
-  if (numCols < 1) {
-    numCols = 2; // fallback
-  }
-  
-  // Draw each column split cell
-  for (let colIndex = 0; colIndex < numCols; colIndex++) {
-    const activeImgId = activeImageIds[colIndex];
-    const prevImgId = prevImageIds[colIndex];
+  if (isTransitioning && activeImageIds.length !== prevImageIds.length) {
+    const firstActiveImg = activeImageIds[0] ? imageCache.get(activeImageIds[0]) : null;
+    const firstPrevImg = prevImageIds[0] ? imageCache.get(prevImageIds[0]) : null;
+    const chosenType = (config.transitionType === 'random_all' && firstActiveImg && firstPrevImg)
+      ? getDeterministicTransitionType(firstPrevImg.src, firstActiveImg.src)
+      : config.transitionType;
 
-    const activeImgEl = activeImgId ? imageCache.get(activeImgId) : null;
-    const prevImgEl = prevImgId ? imageCache.get(prevImgId) : null;
-
-    // Determine the horizontal flipping rule:
-    // 2 columns: Right always flipped (index 1)
-    // 3 columns: Rightmost always flipped (index 2), Middle randomly/deterministically flipped (index 1)
-    // 4 columns: The 2 rightmost columns always flipped (indexes 2 and 3)
-    // >4 columns: The right half of the columns always flipped
-    let shouldFlip = false;
-    if (numCols === 2) {
-      if (colIndex === 1) shouldFlip = true;
-    } else if (numCols === 3) {
-      if (colIndex === 2) {
-        shouldFlip = true;
-      } else if (colIndex === 1) {
-        const blockId = activeBlock ? activeBlock.id : 0;
-        shouldFlip = (blockId % 2 === 0);
-      }
-    } else if (numCols === 4) {
-      if (colIndex === 2 || colIndex === 3) {
-        shouldFlip = true;
-      }
-    } else if (numCols > 4) {
-      const half = Math.floor(numCols / 2);
-      if (colIndex >= numCols - half) {
-        shouldFlip = true;
-      }
+    // --- Draw Layout 1 (Prev Block Columns) ---
+    ctx.save();
+    let alphaPrev = 1.0;
+    if (chosenType === 'slide' || chosenType === 'slide_left' || chosenType === 'slide_right' || chosenType === 'slide_up' || chosenType === 'slide_down' || chosenType === 'curtain_open') {
+      alphaPrev = 1.0;
+    } else {
+      alphaPrev = 1.0 - transitionProgress;
     }
 
-    drawColumnFrame(
-      ctx,
-      colIndex,
-      numCols,
-      width,
-      height,
-      activeImgEl || null,
-      prevImgEl || null,
-      activeBlock,
-      prevBlock,
-      isTransitioning,
-      transitionProgress,
-      config,
-      adjustedTime,
-      images,
-      imageCache,
-      shouldFlip
-    );
+    if (chosenType === 'slide' || chosenType === 'slide_left') {
+      ctx.translate(-(transitionProgress * width), 0);
+    } else if (chosenType === 'slide_right') {
+      ctx.translate(transitionProgress * width, 0);
+    } else if (chosenType === 'slide_up') {
+      ctx.translate(0, -(transitionProgress * height));
+    } else if (chosenType === 'slide_down') {
+      ctx.translate(0, transitionProgress * height);
+    } else if (chosenType === 'curtain_open') {
+      const half = width / 2;
+      ctx.beginPath();
+      ctx.rect(0, 0, half * (1 - transitionProgress), height);
+      ctx.rect(half + half * transitionProgress, 0, half * (1 - transitionProgress), height);
+      ctx.clip();
+    }
+
+    const prevCount = prevImageIds.length;
+    for (let colIndex = 0; colIndex < prevCount; colIndex++) {
+      const prevImgId = prevImageIds[colIndex];
+      const prevImgEl = prevImgId ? imageCache.get(prevImgId) : null;
+
+      let shouldFlip = false;
+      if (prevCount === 2) {
+        if (colIndex === 1) shouldFlip = true;
+      } else if (prevCount === 3) {
+        if (colIndex === 2) {
+          shouldFlip = true;
+        } else if (colIndex === 1) {
+          const blockId = prevBlock ? prevBlock.id : 0;
+          shouldFlip = (blockId % 2 === 0);
+        }
+      } else if (prevCount === 4) {
+        if (colIndex === 2 || colIndex === 3) {
+          shouldFlip = true;
+        }
+      } else if (prevCount > 4) {
+        const half = Math.floor(prevCount / 2);
+        if (colIndex >= prevCount - half) {
+          shouldFlip = true;
+        }
+      }
+
+      drawColumnFrame(
+        ctx,
+        colIndex,
+        prevCount,
+        width,
+        height,
+        null,
+        prevImgEl || null,
+        null,
+        prevBlock,
+        false,
+        1.0,
+        config,
+        adjustedTime,
+        images,
+        imageCache,
+        shouldFlip,
+        alphaPrev
+      );
+    }
+    ctx.restore();
+
+    // --- Draw Layout 2 (Active Block Columns) ---
+    ctx.save();
+    let alphaActive = 1.0;
+    if (chosenType === 'slide' || chosenType === 'slide_left' || chosenType === 'slide_right' || chosenType === 'slide_up' || chosenType === 'slide_down' || chosenType === 'curtain_open') {
+      alphaActive = 1.0;
+    } else {
+      alphaActive = transitionProgress;
+    }
+
+    if (chosenType === 'slide' || chosenType === 'slide_left') {
+      ctx.translate((1 - transitionProgress) * width, 0);
+    } else if (chosenType === 'slide_right') {
+      ctx.translate(-(1 - transitionProgress) * width, 0);
+    } else if (chosenType === 'slide_up') {
+      ctx.translate(0, (1 - transitionProgress) * height);
+    } else if (chosenType === 'slide_down') {
+      ctx.translate(0, -(1 - transitionProgress) * height);
+    } else if (chosenType === 'wipe_left') {
+      ctx.beginPath();
+      ctx.rect(width * (1 - transitionProgress), 0, width * transitionProgress, height);
+      ctx.clip();
+    } else if (chosenType === 'wipe_right') {
+      ctx.beginPath();
+      ctx.rect(0, 0, width * transitionProgress, height);
+      ctx.clip();
+    } else if (chosenType === 'wipe_up') {
+      ctx.beginPath();
+      ctx.rect(0, height * (1 - transitionProgress), width, height * transitionProgress);
+      ctx.clip();
+    } else if (chosenType === 'wipe_down') {
+      ctx.beginPath();
+      ctx.rect(0, 0, width, height * transitionProgress);
+      ctx.clip();
+    } else if (chosenType === 'curtain_close') {
+      ctx.beginPath();
+      const half = width / 2;
+      ctx.rect(0, 0, half * transitionProgress, height);
+      ctx.rect(width - half * transitionProgress, 0, half * transitionProgress, height);
+      ctx.clip();
+    } else if (chosenType === 'grid_dissolve') {
+      ctx.beginPath();
+      const numStrips = 12;
+      const stripWidth = width / numStrips;
+      for (let s = 0; s < numStrips; s++) {
+        ctx.rect(s * stripWidth, 0, stripWidth * transitionProgress, height);
+      }
+      ctx.clip();
+    }
+
+    const activeCount = activeImageIds.length;
+    for (let colIndex = 0; colIndex < activeCount; colIndex++) {
+      const activeImgId = activeImageIds[colIndex];
+      const activeImgEl = activeImgId ? imageCache.get(activeImgId) : null;
+
+      let shouldFlip = false;
+      if (activeCount === 2) {
+        if (colIndex === 1) shouldFlip = true;
+      } else if (activeCount === 3) {
+        if (colIndex === 2) {
+          shouldFlip = true;
+        } else if (colIndex === 1) {
+          const blockId = activeBlock ? activeBlock.id : 0;
+          shouldFlip = (blockId % 2 === 0);
+        }
+      } else if (activeCount === 4) {
+        if (colIndex === 2 || colIndex === 3) {
+          shouldFlip = true;
+        }
+      } else if (activeCount > 4) {
+        const half = Math.floor(activeCount / 2);
+        if (colIndex >= activeCount - half) {
+          shouldFlip = true;
+        }
+      }
+
+      drawColumnFrame(
+        ctx,
+        colIndex,
+        activeCount,
+        width,
+        height,
+        activeImgEl || null,
+        null,
+        activeBlock,
+        null,
+        false,
+        1.0,
+        config,
+        adjustedTime,
+        images,
+        imageCache,
+        shouldFlip,
+        alphaActive
+      );
+    }
+    ctx.restore();
+  } else {
+    let numCols = isTransitioning 
+      ? Math.max(activeImageIds.length, prevImageIds.length)
+      : (activeBlock ? activeImageIds.length : prevImageIds.length);
+    if (numCols < 1) {
+      numCols = 2; // fallback
+    }
+    
+    // Draw each column split cell
+    for (let colIndex = 0; colIndex < numCols; colIndex++) {
+      const activeImgId = activeImageIds[colIndex];
+      const prevImgId = prevImageIds[colIndex];
+
+      const activeImgEl = activeImgId ? imageCache.get(activeImgId) : null;
+      const prevImgEl = prevImgId ? imageCache.get(prevImgId) : null;
+
+      // Determine the horizontal flipping rule:
+      // 2 columns: Right always flipped (index 1)
+      // 3 columns: Rightmost always flipped (index 2), Middle randomly/deterministically flipped (index 1)
+      // 4 columns: The 2 rightmost columns always flipped (indexes 2 and 3)
+      // >4 columns: The right half of the columns always flipped
+      let shouldFlip = false;
+      if (numCols === 2) {
+        if (colIndex === 1) shouldFlip = true;
+      } else if (numCols === 3) {
+        if (colIndex === 2) {
+          shouldFlip = true;
+        } else if (colIndex === 1) {
+          const blockId = activeBlock ? activeBlock.id : 0;
+          shouldFlip = (blockId % 2 === 0);
+        }
+      } else if (numCols === 4) {
+        if (colIndex === 2 || colIndex === 3) {
+          shouldFlip = true;
+        }
+      } else if (numCols > 4) {
+        const half = Math.floor(numCols / 2);
+        if (colIndex >= numCols - half) {
+          shouldFlip = true;
+        }
+      }
+
+      drawColumnFrame(
+        ctx,
+        colIndex,
+        numCols,
+        width,
+        height,
+        activeImgEl || null,
+        prevImgEl || null,
+        activeBlock,
+        prevBlock,
+        isTransitioning,
+        transitionProgress,
+        config,
+        adjustedTime,
+        images,
+        imageCache,
+        shouldFlip
+      );
+    }
   }
   
   // 5.5 Render background overlay particles on top of the images/columns
