@@ -335,7 +335,13 @@ const drawColumnFrame = (
     }
 
     ctx.translate(centerX, centerY);
-    if (shouldFlip) {
+    let imageShouldFlip = shouldFlip;
+    if (totalCols === 3 && colIndex === 1) {
+      const targetBlock = isPrev ? prevBlock : activeBlock;
+      const blockId = targetBlock ? targetBlock.id : 0;
+      imageShouldFlip = (blockId % 2 === 0);
+    }
+    if (imageShouldFlip) {
       ctx.scale(-1, 1);
     }
     if (rot !== 0) {
