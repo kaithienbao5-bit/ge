@@ -4,6 +4,7 @@
  */
 
 import { SubtitleBlock, CharacterImage, RenderConfig, SubtitlePreset } from '../types';
+import { isBehaviorActiveForBlock } from './behaviorHelper';
 
 /**
  * Helper to pre-load a browser Object URL into an HTMLImageElement
@@ -857,28 +858,34 @@ export function drawVideoFrame(
   const getEnabledBehaviorsForBlock = (bNum: number, blockText: string) => {
     const list: string[] = [];
     if (config.enableFakeNews && config.fakeNewsBlocks) {
-      const match = config.fakeNewsBlocks.split(',').map(x => parseInt(x.trim(), 10)).filter(x => !isNaN(x)).includes(bNum);
-      if (match) list.push('fakeNews');
+      if (isBehaviorActiveForBlock(bNum, config.fakeNewsBlocks, subtitles, 'news')) {
+        list.push('fakeNews');
+      }
     }
     if (config.enableHandWrite && config.handWriteBlocks) {
-      const match = config.handWriteBlocks.split(',').map(x => parseInt(x.trim(), 10)).filter(x => !isNaN(x)).includes(bNum);
-      if (match) list.push('handWrite');
+      if (isBehaviorActiveForBlock(bNum, config.handWriteBlocks, subtitles, 'handwrite')) {
+        list.push('handWrite');
+      }
     }
     if (config.enableFakeComment && config.fakeCommentBlocks) {
-      const match = config.fakeCommentBlocks.split(',').map(x => parseInt(x.trim(), 10)).filter(x => !isNaN(x)).includes(bNum);
-      if (match) list.push('fakeComment');
+      if (isBehaviorActiveForBlock(bNum, config.fakeCommentBlocks, subtitles, 'comment')) {
+        list.push('fakeComment');
+      }
     }
     if (config.enableFakeWebsite && config.fakeWebsiteBlocks) {
-      const match = config.fakeWebsiteBlocks.split(',').map(x => parseInt(x.trim(), 10)).filter(x => !isNaN(x)).includes(bNum);
-      if (match) list.push('fakeWebsite');
+      if (isBehaviorActiveForBlock(bNum, config.fakeWebsiteBlocks, subtitles, 'website')) {
+        list.push('fakeWebsite');
+      }
     }
     if (config.enableFakeVideoEditor && config.fakeVideoEditorBlocks) {
-      const match = config.fakeVideoEditorBlocks.split(',').map(x => parseInt(x.trim(), 10)).filter(x => !isNaN(x)).includes(bNum);
-      if (match) list.push('fakeVideoEditor');
+      if (isBehaviorActiveForBlock(bNum, config.fakeVideoEditorBlocks, subtitles, 'video_editor')) {
+        list.push('fakeVideoEditor');
+      }
     }
     if (config.enableDrawCircle && config.drawCircleBlocks) {
-      const match = config.drawCircleBlocks.split(',').map(x => parseInt(x.trim(), 10)).filter(x => !isNaN(x)).includes(bNum);
-      if (match) list.push('drawCircle');
+      if (isBehaviorActiveForBlock(bNum, config.drawCircleBlocks, subtitles, 'draw_circle')) {
+        list.push('drawCircle');
+      }
     }
     
     // Tự động kích hoạt hành vi Lịch nếu phụ đề của block chứa thông tin ngày tháng VÀ đã bật hành vi số 11
@@ -887,8 +894,9 @@ export function drawVideoFrame(
     }
 
     if (config.enableTouchTyping && config.touchTypingBlocks) {
-      const match = config.touchTypingBlocks.split(',').map(x => parseInt(x.trim(), 10)).filter(x => !isNaN(x)).includes(bNum);
-      if (match) list.push('touchTyping');
+      if (isBehaviorActiveForBlock(bNum, config.touchTypingBlocks, subtitles, 'touch_typing')) {
+        list.push('touchTyping');
+      }
     }
     return list;
   };
@@ -8227,11 +8235,7 @@ export function drawVideoFrame(
 
   // 5.6 Render Human Behavior 1: Red Arrow and Target Circle
   if (config.enableHumanArrow && config.humanArrowBlocks && activeBlock && blockNum !== -1) {
-    const isArrowBlock = config.humanArrowBlocks
-      .split(',')
-      .map(x => parseInt(x.trim(), 10))
-      .filter(x => !isNaN(x))
-      .includes(blockNum);
+    const isArrowBlock = isBehaviorActiveForBlock(blockNum, config.humanArrowBlocks, subtitles, 'arrow');
 
     if (isArrowBlock) {
       // Create stable seeded values based on block ID
@@ -8443,11 +8447,7 @@ export function drawVideoFrame(
     // 5.8 Check if typewriter overlay behavior is active for this subtitle block
     let isTypewriterActive = false;
     if (config.enableHumanTypewriter && config.humanTypewriterBlocks && blockNum !== -1) {
-      isTypewriterActive = config.humanTypewriterBlocks
-        .split(',')
-        .map(x => parseInt(x.trim(), 10))
-        .filter(x => !isNaN(x))
-        .includes(blockNum);
+      isTypewriterActive = isBehaviorActiveForBlock(blockNum, config.humanTypewriterBlocks, subtitles, 'typewriter');
     }
 
     if (isTypewriterActive) {

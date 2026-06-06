@@ -7,6 +7,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { SubtitleBlock, CharacterImage, RenderConfig, SubtitlePreset } from '../types';
 import { drawVideoFrame, preloadImage, getHighlightCustomText } from '../utils/videoRenderer';
 import { playTypewriterClick, playBackgroundNoise } from '../utils/audioSynthesizer';
+import { isBehaviorActiveForBlock } from '../utils/behaviorHelper';
 import { Download, Film, Loader2, Play, AlertTriangle, CheckCircle, RefreshCw, XCircle, Clock, Video, Cpu, Sparkles, Check, X } from 'lucide-react';
 // @ts-ignore
 import ysFixWebmDuration from 'fix-webm-duration';
@@ -573,7 +574,7 @@ export default function VideoExporter({
         );
 
         // Dynamic volume ducking for typing behavior 2 (Human Typewriter) & 12 (Touch Typing)
-        const isTouchTypingActiveExport = !!(exportConfig.enableTouchTyping && exportConfig.touchTypingBlocks);
+        const isTouchTypingActiveExport = !!exportConfig.enableTouchTyping;
         let targetVolumeFactor = 1.0;
         if (subtitles && subtitles.length > 0 && recordCtx && destNode) {
           const introTime = exportConfig.introVideoUrl ? exportConfig.introDuration : 0;
@@ -583,19 +584,10 @@ export default function VideoExporter({
             const activeBlock = subtitles.find(s => adjustedTime >= s.startTime && adjustedTime <= s.endTime);
             if (activeBlock) {
               const blockIdx = subtitles.indexOf(activeBlock);
-              const blockNumStr = (blockIdx + 1).toString();
-              const pBlocks = (exportConfig.humanTypewriterBlocks || '')
-                .split(',')
-                .map(s => s.trim())
-                .filter(Boolean);
+              const blockNum = blockIdx + 1;
 
-              const touchBlocks = (exportConfig.touchTypingBlocks || '')
-                .split(',')
-                .map(s => s.trim())
-                .filter(Boolean);
-
-              const isHumanTypewriterActiveExport = !!(exportConfig.enableHumanTypewriter && pBlocks.includes(blockNumStr));
-              const isTouchActiveExport = !!(isTouchTypingActiveExport && touchBlocks.includes(blockNumStr));
+              const isHumanTypewriterActiveExport = !!(exportConfig.enableHumanTypewriter && isBehaviorActiveForBlock(blockNum, exportConfig.humanTypewriterBlocks, subtitles, 'typewriter'));
+              const isTouchActiveExport = !!(isTouchTypingActiveExport && isBehaviorActiveForBlock(blockNum, exportConfig.touchTypingBlocks, subtitles, 'touch_typing'));
 
               if (isHumanTypewriterActiveExport || isTouchActiveExport) {
                 const blockDur = Math.max(0.5, activeBlock.endTime - activeBlock.startTime);
@@ -623,19 +615,10 @@ export default function VideoExporter({
             const activeBlock = subtitles.find(s => adjustedTime >= s.startTime && adjustedTime <= s.endTime);
             if (activeBlock) {
               const blockIdx = subtitles.indexOf(activeBlock);
-              const blockNumStr = (blockIdx + 1).toString();
-              const pBlocks = (exportConfig.humanTypewriterBlocks || '')
-                .split(',')
-                .map(s => s.trim())
-                .filter(Boolean);
+              const blockNum = blockIdx + 1;
 
-              const touchBlocks = (exportConfig.touchTypingBlocks || '')
-                .split(',')
-                .map(s => s.trim())
-                .filter(Boolean);
-
-              const isHumanTypewriterActiveExport = !!(exportConfig.enableHumanTypewriter && pBlocks.includes(blockNumStr));
-              const isTouchActiveExport = !!(isTouchTypingActiveExport && touchBlocks.includes(blockNumStr));
+              const isHumanTypewriterActiveExport = !!(exportConfig.enableHumanTypewriter && isBehaviorActiveForBlock(blockNum, exportConfig.humanTypewriterBlocks, subtitles, 'typewriter'));
+              const isTouchActiveExport = !!(isTouchTypingActiveExport && isBehaviorActiveForBlock(blockNum, exportConfig.touchTypingBlocks, subtitles, 'touch_typing'));
 
               if (isHumanTypewriterActiveExport || isTouchActiveExport) {
                 const bElapsed = adjustedTime - activeBlock.startTime;
@@ -650,15 +633,15 @@ export default function VideoExporter({
                   : (exportConfig.typewriterVolume !== undefined ? exportConfig.typewriterVolume : 30);
 
                 if (typewriterState.blockId !== activeBlock.id) {
-                  typewriterState = { blockId: activeBlock.id, typedCount: charCount };
-                  if (charCount > 0 && soundAllowedExport) {
-                    playTypewriterClick(recordCtx, destNode, activeVolExport);
-                  }
+                   typewriterState = { blockId: activeBlock.id, typedCount: charCount };
+                   if (charCount > 0 && soundAllowedExport) {
+                     playTypewriterClick(recordCtx, destNode, activeVolExport);
+                   }
                 } else if (charCount > typewriterState.typedCount) {
-                  typewriterState.typedCount = charCount;
-                  if (soundAllowedExport) {
-                    playTypewriterClick(recordCtx, destNode, activeVolExport);
-                  }
+                   typewriterState.typedCount = charCount;
+                   if (soundAllowedExport) {
+                     playTypewriterClick(recordCtx, destNode, activeVolExport);
+                   }
                 }
               }
             }
@@ -673,12 +656,9 @@ export default function VideoExporter({
           if (currentPlaybackTime >= introTime && currentPlaybackTime <= maxAudioEnd) {
             const activeBlock = subtitles.find(s => adjustedTime >= s.startTime && adjustedTime <= s.endTime);
             if (activeBlock) {
-              const bNum = subtitles.indexOf(activeBlock) + 1;
-              const isDrawCircleActive = exportConfig.drawCircleBlocks
-                .split(',')
-                .map(x => parseInt(x.trim(), 10))
-                .filter(x => !isNaN(x))
-                .includes(bNum);
+              const blockIdx = subtitles.indexOf(activeBlock);
+              const blockNum = blockIdx + 1;
+              const isDrawCircleActive = isBehaviorActiveForBlock(blockNum, exportConfig.drawCircleBlocks, subtitles, 'draw_circle');
               
               if (isDrawCircleActive) {
                 const elapsed = adjustedTime - activeBlock.startTime;
@@ -709,12 +689,11 @@ export default function VideoExporter({
             const activeBlock = subtitles.find(s => adjustedTime >= s.startTime && adjustedTime <= s.endTime);
             if (activeBlock) {
               const blockIdx = subtitles.indexOf(activeBlock);
-              const blockNumStr = (blockIdx + 1).toString();
+              const blockNum = blockIdx + 1;
               const noises = exportConfig.backgroundNoises || [];
               noises.forEach((noiseItem) => {
                 if (noiseItem.segments) {
-                  const segs = noiseItem.segments.split(',').map(s => s.trim()).filter(Boolean);
-                  if (segs.includes(blockNumStr)) {
+                  if (isBehaviorActiveForBlock(blockNum, noiseItem.segments, subtitles, 'noise_' + noiseItem.id)) {
                     const trackingKey = `${activeBlock.id}_${noiseItem.id}`;
                     if (!playedNoiseTracker[trackingKey]) {
                       playedNoiseTracker[trackingKey] = true;

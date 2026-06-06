@@ -8,6 +8,7 @@ import { Play, Pause, Square, Sliders, Volume2, Maximize2, AlertCircle, ToggleLe
 import { SubtitleBlock, CharacterImage, RenderConfig, SubtitlePreset } from '../types';
 import { drawVideoFrame, preloadImage, getHighlightCustomText } from '../utils/videoRenderer';
 import { playTypewriterClick, playBackgroundNoise } from '../utils/audioSynthesizer';
+import { isBehaviorActiveForBlock } from '../utils/behaviorHelper';
 
 interface VideoPreviewSectionProps {
   subtitles: SubtitleBlock[];
@@ -240,7 +241,7 @@ export default function VideoPreviewSection({
           playbackTimeRef.current = currentTime;
           setPlaybackTime(currentTime);
 
-          const isTouchTypingEnabled = !!(config.enableTouchTyping && config.touchTypingBlocks);
+          const isTouchTypingEnabled = !!config.enableTouchTyping;
 
           // Dynamic volume ducking for typing behavior 2 (Human Typewriter) & 12 (Touch Typing)
           let targetVolumeFactor = 1.0;
@@ -252,12 +253,10 @@ export default function VideoPreviewSection({
               const activeBlock = subtitles.find(s => adjustedTime >= s.startTime && adjustedTime <= s.endTime);
               if (activeBlock) {
                 const blockIdx = subtitles.indexOf(activeBlock);
-                const blockNumStr = (blockIdx + 1).toString();
-                const pBlocks = (config.humanTypewriterBlocks || '').split(',').map(s => s.trim()).filter(Boolean);
-                const touchBlocks = (config.touchTypingBlocks || '').split(',').map(s => s.trim()).filter(Boolean);
+                const blockNum = blockIdx + 1;
                 
-                const isHumanTypewriterActive = !!(config.enableHumanTypewriter && pBlocks.includes(blockNumStr));
-                const isTouchActive = !!(isTouchTypingEnabled && touchBlocks.includes(blockNumStr));
+                const isHumanTypewriterActive = !!(config.enableHumanTypewriter && isBehaviorActiveForBlock(blockNum, config.humanTypewriterBlocks, subtitles, 'typewriter'));
+                const isTouchActive = !!(isTouchTypingEnabled && isBehaviorActiveForBlock(blockNum, config.touchTypingBlocks, subtitles, 'touch_typing'));
                 
                 if (isHumanTypewriterActive || isTouchActive) {
                   const blockDur = Math.max(0.5, activeBlock.endTime - activeBlock.startTime);
@@ -286,24 +285,15 @@ export default function VideoPreviewSection({
               const activeBlock = subtitles.find(s => adjustedTime >= s.startTime && adjustedTime <= s.endTime);
               if (activeBlock) {
                 const blockIdx = subtitles.indexOf(activeBlock);
-                const blockNumStr = (blockIdx + 1).toString();
-                const pBlocks = (config.humanTypewriterBlocks || '')
-                  .split(',')
-                  .map(s => s.trim())
-                  .filter(Boolean);
-
-                const touchBlocks = (config.touchTypingBlocks || '')
-                  .split(',')
-                  .map(s => s.trim())
-                  .filter(Boolean);
+                const blockNum = blockIdx + 1;
 
                 let matchedHighlightText = null;
                 if (config.enableHighlightDate) {
                   matchedHighlightText = getHighlightCustomText(activeBlock.text, config);
                 }
 
-                const isHumanTypewriterActive = !!(config.enableHumanTypewriter && pBlocks.includes(blockNumStr));
-                const isTouchActive = !!(isTouchTypingEnabled && touchBlocks.includes(blockNumStr));
+                const isHumanTypewriterActive = !!(config.enableHumanTypewriter && isBehaviorActiveForBlock(blockNum, config.humanTypewriterBlocks, subtitles, 'typewriter'));
+                const isTouchActive = !!(isTouchTypingEnabled && isBehaviorActiveForBlock(blockNum, config.touchTypingBlocks, subtitles, 'touch_typing'));
                 const isDateHighlightActive = !!(config.enableHighlightDate && matchedHighlightText);
 
                 if (isHumanTypewriterActive || isTouchActive || isTypewriterActive || isDateHighlightActive) {
@@ -335,12 +325,7 @@ export default function VideoPreviewSection({
 
                 // Draw Circle Mouse Pointer Click sound simulation
                 if (config.enableDrawCircle && config.drawCircleBlocks) {
-                  const bNum = subtitles.indexOf(activeBlock) + 1;
-                  const isDrawCircleActive = config.drawCircleBlocks
-                    .split(',')
-                    .map(x => parseInt(x.trim(), 10))
-                    .filter(x => !isNaN(x))
-                    .includes(bNum);
+                  const isDrawCircleActive = isBehaviorActiveForBlock(blockNum, config.drawCircleBlocks, subtitles, 'draw_circle');
                   
                   if (isDrawCircleActive) {
                     const elapsed = adjustedTime - activeBlock.startTime;
@@ -368,8 +353,7 @@ export default function VideoPreviewSection({
                   const noises = config.backgroundNoises || [];
                   noises.forEach((noiseItem) => {
                     if (noiseItem.segments) {
-                      const segs = noiseItem.segments.split(',').map(s => s.trim()).filter(Boolean);
-                      if (segs.includes(blockNumStr)) {
+                      if (isBehaviorActiveForBlock(blockNum, noiseItem.segments, subtitles, 'noise_' + noiseItem.id)) {
                         const trackingKey = `${activeBlock.id}_${noiseItem.id}`;
                         if (!playedNoiseTrackerRef.current[trackingKey]) {
                           playedNoiseTrackerRef.current[trackingKey] = true;

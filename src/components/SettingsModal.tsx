@@ -8,6 +8,7 @@ import { RenderConfig, CharacterImage, SubtitlePreset } from '../types';
 import { DEFAULT_STICKER_GROUPS, populateDefaultStickers } from '../utils/stickerGenerator';
 import { drawBackgroundEffect, getHighlightDateText, getHighlightCustomText } from '../utils/videoRenderer';
 import { playTypewriterClick, playBackgroundNoise } from '../utils/audioSynthesizer';
+import { BehaviorSettings } from './BehaviorSettings';
 import { 
   X, 
   Sliders, 
@@ -4450,7 +4451,13 @@ export default function SettingsModal({
                 </div>
 
                 {/* Accordion List */}
-                <div className="space-y-2.5">
+                <BehaviorSettings
+                  config={config}
+                  updateConfig={updateConfig}
+                  activeAccordion={activeBehaviorAccordion}
+                  setActiveAccordion={setActiveBehaviorAccordion}
+                />
+                <div className="hidden">
                   
                   {/* Choice 1: Red Arrow & Circle */}
                   <div className="border border-white/10 rounded-lg overflow-hidden bg-[#0a0a0f]">
@@ -5677,11 +5684,11 @@ export default function SettingsModal({
                       </div>
                     )}
                   </div>
+                </div>
 
                 </div>
 
               </div>
-            </div>
           )}
 
         </div>
